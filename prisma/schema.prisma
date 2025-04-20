@@ -1,15 +1,82 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../app/generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
+
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  password         String?   // Null for Google-auth users
+  name             String
+  role             Role      @default(USER)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // OAuth fields
+  googleId         String?   @unique
+  accessToken      String?   // Google OAuth
+  refreshToken     String?   // Google OAuth
+
+  // JWT password reset & email verification
+  verifyToken      String?
+  resetPassToken   String?
+
+  // Relations
+  interestedEvents UserEventInterest[]
+  managedClub      Club?     @relation("ClubManager")
+}
+
+model Club {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  managerId   String   @unique
+  manager     User     @relation("ClubManager", fields: [managerId], references: [id])
+
+  events      Event[]
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  date        DateTime
+  location    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clubId      String
+  club        Club     @relation(fields: [clubId], references: [id])
+
+  interestedUsers UserEventInterest[]
+}
+
+model UserEventInterest {
+  id        String   @id @default(uuid())
+  userId    String
+  eventId   String
+  addedAt   DateTime @default(now())
+  synced    Boolean  @default(false)
+
+  user      User     @relation(fields: [userId], references: [id])
+  event     Event    @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+}
+
+enum Role {
+  USER
+  CLUB_MANAGER
+  ADMIN
+}
+
