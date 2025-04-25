@@ -1,11 +1,12 @@
 import { auth } from '@/auth';
 import { GoogleSignInButton } from '@/components/ui/googleButton';
 import { redirect } from 'next/navigation';
-
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
 
 async function handleSignUp(formData: FormData) {
   "use server";
   
+  const url=process.env.BASE_URL ;
   const email = formData.get('email')?.toString();
   const password = formData.get('password')?.toString();
   const name = formData.get('name')?.toString();
@@ -15,8 +16,11 @@ async function handleSignUp(formData: FormData) {
   }
 
   try {
-    const res = await fetch('/api/auth/signup', {
+    const res = await fetch(`${url}/api/auth/signup`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ email, password, name }),
     });
     const data = await res.json();
@@ -24,10 +28,35 @@ async function handleSignUp(formData: FormData) {
     if (res.ok) {
       redirect('/signin');
     } else {
-        throw new Error(await res.text());
+      let errorMessage = `Sign-up failed with status: ${res.status}`;
+      try {
+        const errorData = await res.json();
+        errorMessage = errorData.message || errorData.error || JSON.stringify(errorData);
+      } catch (jsonError) {
+        try {
+          const textError = await res.text();
+          if (textError) {
+            errorMessage = textError;
+          }
+        } catch (textParseError) {
+          console.error("Failed to parse error response body:", textParseError);
+        }
+      }
+      console.error("Sign-up API Error:", errorMessage);
+      throw new Error(errorMessage || "Sign-up failed. Please try again.");
     }
   } catch (error) {
-    throw new Error("An error occurred.");
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    console.error("Error in handleSignUp:", error);
+    if (error instanceof Error) {
+         if (error.message.includes('Failed to parse URL')) {
+             throw new Error("Internal configuration error. Could not determine API endpoint.");
+         }
+         throw new Error(error.message || "An unexpected error occurred during sign-up.");
+    }
+    throw new Error("An unexpected error occurred during sign-up.");
 }
 }
 
